@@ -30,7 +30,7 @@ app.secret_key = os.environ.get(
 
 
 # =========================================================
-# SUPABASE CONFIGURATION
+# SUPABASE
 # =========================================================
 
 SUPABASE_URL = os.environ.get(
@@ -43,14 +43,11 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get(
     ""
 ).strip()
 
-
 supabase: Client | None = None
-
 
 if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
 
     try:
-
         supabase = create_client(
             SUPABASE_URL,
             SUPABASE_SERVICE_ROLE_KEY
@@ -59,18 +56,10 @@ if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
         print("Supabase: CONNECTED")
 
     except Exception as error:
-
-        print(
-            "Supabase connection error:",
-            error
-        )
+        print("Supabase connection error:", error)
 
 else:
-
-    print(
-        "WARNING: Supabase environment variables "
-        "are not configured."
-    )
+    print("WARNING: Supabase environment variables are not configured.")
 
 
 # =========================================================
@@ -78,14 +67,17 @@ else:
 # =========================================================
 
 PROFILE_BUCKET = "profiles"
-VERIFICATION_BUCKET = "verification"
 REPORT_BUCKET = "reports"
-MAP_BUCKET = "maps"
 
 
 # =========================================================
 # GEMINI
 # =========================================================
+
+GEMINI_MODEL = os.environ.get(
+    "GEMINI_MODEL",
+    "gemini-3.6-flash"
+)
 
 GEMINI_API_KEY = os.environ.get(
     "GEMINI_API_KEY",
@@ -94,16 +86,950 @@ GEMINI_API_KEY = os.environ.get(
 
 gemini_client = None
 
-GEMINI_MODEL = "gemini-3.6-flash"
-
 
 def configure_gemini_client(api_key):
 
     global GEMINI_API_KEY
     global gemini_client
 
-    GEMINI_API_KEY = (
-        api_key or ""
+    GEMINI_API_KEY = (api_key or "").strip()
+
+    if not GEMINI_API_KEY:
+
+        gemini_client = None
+
+        print("Gemini: API key not configured.")
+
+        return
+
+    try:
+
+        gemini_client = genai.Client(
+            api_key=GEMINI_API_KEY
+        )
+
+        print("Gemini: CONNECTED")
+
+    except Exception as error:
+
+        gemini_client = None
+
+        print(
+            "Gemini configuration error:",
+            error
+        )
+
+
+def get_configured_gemini_key():
+
+    # First try Supabase
+    if supabase:
+
+        try:
+
+            result = (
+                supabase
+                .table("app_settings")
+                .select("value")
+                .eq(
+                    "key",
+                    "gemini_api_key"
+                )
+                .limit(1)
+                .execute()
+            )
+
+            if result.data:
+
+                value = result.data[0].get(
+                    "value"
+                )
+
+                if value:
+
+                    return str(
+                        value
+                    ).strip()
+
+        except Exception as error:
+
+            print(
+                "Gemini settings load error:",
+                error
+            )
+
+    # Fallback to Vercel environment variable
+    return os.environ.get(
+        "GEMINI_API_KEY",
+        ""
+    ).strip()
+
+
+# =========================================================
+# GOVERNMENT DEPARTMENTS
+# =========================================================
+
+GOVERNMENT_DEPARTMENTS = {
+
+    "Philippine National Police": {
+        "phone": "PROTOTYPE-PNP-NUMBER",
+        "email": "pnp@gabay-prototype.gov.ph"
+    },
+
+    "Bureau of Fire Protection": {
+        "phone": "PROTOTYPE-BFP-NUMBER",
+        "email": "bfp@gabay-prototype.gov.ph"
+    },
+
+    "Local Disaster Risk Reduction and Management Office": {
+        "phone": "PROTOTYPE-LDRRMO-NUMBER",
+        "email": "ldrrmo@gabay-prototype.gov.ph"
+    },
+
+    "City/Municipal Health Office": {
+        "phone": "PROTOTYPE-HEALTH-NUMBER",
+        "email": "health@gabay-prototype.gov.ph"
+    },
+
+    "Social Welfare and Development Office": {
+        "phone": "PROTOTYPE-DSWD-NUMBER",
+        "email": "socialwelfare@gabay-prototype.gov.ph"
+    },
+
+    "Public Works and Engineering Office": {
+        "phone": "PROTOTYPE-ENGINEERING-NUMBER",
+        "email": "engineering@gabay-prototype.gov.ph"
+    }
+}
+
+
+# =========================================================
+# SUPABASE CHECK
+# =========================================================
+
+def require_supabase():
+
+    if not supabase:
+
+        raise RuntimeError(
+            "Supabase is not configured."
+        )
+
+
+# =========================================================
+# ROLE HELPERS
+# =========================================================
+
+def is_logged_in():
+
+    return "user_id" in session
+
+
+def is_admin_user():
+
+    return (
+        is_logged_in()
+        and session.get("role") == "admin"
+    )
+
+
+def is_government_user():
+
+    return (
+        is_logged_in()
+        and session.get("role") in [
+            "admin",
+            "government",
+            "gov_employee",
+            "government_employee"
+        ]
+    )
+
+
+def is_government_employee():
+
+    return (
+        is_logged_in()
+        and session.get("role") in [
+            "gov_employee",
+            "government_employee"
+        ]
+    )
+
+
+# =========================================================
+# STORAGE
+# =========================================================
+
+def upload_base64_image(
+    bucket,
+    image_data,
+    extension="jpg"
+):
+
+    require_supabase()
+
+    if not image_data:
+
+        raise ValueError(
+            "No image data provided."
+        )
+
+    if "," in image_data:
+
+        image_data = image_data.split(
+            ",",
+            1
+        )[1]
+
+    try:
+
+        image_bytes = base64.b64decode(
+            image_data,
+            validate=True
+        )
+
+    except Exception as error:
+
+        raise ValueError(
+            "Invalid image data."
+        ) from error
+
+    if len(image_bytes) > 8 * 1024 * 1024:
+
+        raise ValueError(
+            "Image is larger than 8 MB."
+        )
+
+    filename = (
+        f"{uuid.uuid4().hex}.{extension}"
+    )
+
+    supabase.storage.from_(
+        bucket
+    ).upload(
+        filename,
+        image_bytes,
+        {
+            "content-type": "image/jpeg",
+            "upsert": "false"
+        }
+    )
+
+    return filename
+
+
+# =========================================================
+# INITIALIZE DEFAULT ACCOUNTS
+# =========================================================
+
+def initialize_database():
+
+    print(
+        "Checking GABAY configuration..."
+    )
+
+    configure_gemini_client(
+        get_configured_gemini_key()
+    )
+
+    if not supabase:
+
+        print(
+            "Supabase unavailable."
+        )
+
+        return
+
+    default_accounts = [
+
+        {
+            "full_name":
+                "GABAY Administrator",
+
+            "email":
+                "admin@gabay.gov.ph",
+
+            "password":
+                "Admin12345!",
+
+            "role":
+                "admin"
+        },
+
+        {
+            "full_name":
+                "GABAY Government Personnel",
+
+            "email":
+                "government@gabay.gov.ph",
+
+            "password":
+                "Gov12345!",
+
+            "role":
+                "government"
+        },
+
+        {
+            "full_name":
+                "GABAY Government Employee",
+
+            "email":
+                "employee@gabay.gov.ph",
+
+            "password":
+                "Employee123!",
+
+            "role":
+                "gov_employee"
+        }
+    ]
+
+    for account in default_accounts:
+
+        try:
+
+            existing = (
+                supabase
+                .table("users")
+                .select("id,role")
+                .eq(
+                    "email",
+                    account["email"]
+                )
+                .limit(1)
+                .execute()
+            )
+
+            if not existing.data:
+
+                supabase.table(
+                    "users"
+                ).insert({
+
+                    "full_name":
+                        account["full_name"],
+
+                    "email":
+                        account["email"],
+
+                    "password":
+                        account["password"],
+
+                    "role":
+                        account["role"],
+
+                    "profile_image":
+                        None
+
+                }).execute()
+
+                print(
+                    "Created default account:",
+                    account["email"]
+                )
+
+            else:
+
+                print(
+                    "Account already exists:",
+                    account["email"]
+                )
+
+        except Exception as error:
+
+            print(
+                "Account initialization error:",
+                account["email"],
+                error
+            )
+
+
+# =========================================================
+# GEMINI PRIORITY ANALYSIS
+# =========================================================
+
+def analyze_request_with_gemini(
+    request_id,
+    category,
+    description
+):
+
+    try:
+
+        configure_gemini_client(
+            get_configured_gemini_key()
+        )
+
+        if not gemini_client:
+
+            print(
+                "Gemini unavailable. "
+                "Using Moderate fallback."
+            )
+
+            supabase.table(
+                "requests"
+            ).update({
+
+                "priority":
+                    "Moderate",
+
+                "analysis_status":
+                    "completed"
+
+            }).eq(
+                "id",
+                request_id
+            ).execute()
+
+            return
+
+        prompt = f"""
+You are the emergency severity classification AI
+for a Philippine government assistance system called GABAY.
+
+Analyze the citizen request.
+
+Understand:
+- English
+- Filipino
+- Tagalog
+- Bisaya/Cebuano
+- mixed language
+- slang
+- informal grammar
+- short messages
+
+CATEGORY:
+{category}
+
+CITIZEN DESCRIPTION:
+{description}
+
+CLASSIFICATION:
+
+CRITICAL:
+Immediate danger to life, death, serious injury,
+unconsciousness, drowning, severe bleeding, active fire,
+building collapse, trapped people, or another emergency
+requiring immediate response.
+
+HIGH:
+Serious situation requiring urgent government response
+but without clear immediate life-threatening danger.
+
+MODERATE:
+Legitimate government assistance that is not immediately
+dangerous.
+
+LOW:
+Routine information, documents, inquiries, or minor
+non-emergency concerns.
+
+If a person may die or suffer serious harm without
+immediate action, classify it as CRITICAL.
+
+Return ONLY one:
+
+Critical
+High
+Moderate
+Low
+
+No explanation.
+"""
+
+        response = (
+            gemini_client
+            .models
+            .generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt
+            )
+        )
+
+        text = (
+            response.text.strip()
+            if response.text
+            else ""
+        )
+
+        result = text.lower()
+
+        if "critical" in result:
+
+            priority = "Critical"
+
+        elif "high" in result:
+
+            priority = "High"
+
+        elif "moderate" in result:
+
+            priority = "Moderate"
+
+        elif "low" in result:
+
+            priority = "Low"
+
+        else:
+
+            priority = "Moderate"
+
+        supabase.table(
+            "requests"
+        ).update({
+
+            "priority":
+                priority,
+
+            "analysis_status":
+                "completed"
+
+        }).eq(
+            "id",
+            request_id
+        ).execute()
+
+        print(
+            "Request:",
+            request_id,
+            "Priority:",
+            priority
+        )
+
+    except Exception as error:
+
+        print(
+            "Gemini analysis error:",
+            error
+        )
+
+        try:
+
+            supabase.table(
+                "requests"
+            ).update({
+
+                "priority":
+                    "Moderate",
+
+                "analysis_status":
+                    "completed"
+
+            }).eq(
+                "id",
+                request_id
+            ).execute()
+
+        except Exception as db_error:
+
+            print(
+                "Fallback database error:",
+                db_error
+            )
+
+
+# =========================================================
+# HOME
+# =========================================================
+
+@app.route("/")
+def index():
+
+    if is_logged_in():
+
+        if is_government_user():
+
+            return redirect(
+                url_for(
+                    "government_dashboard"
+                )
+            )
+
+        return redirect(
+            url_for("dashboard")
+        )
+
+    return render_template(
+        "index.html"
+    )
+
+
+# =========================================================
+# REGISTER
+# =========================================================
+
+@app.route(
+    "/register",
+    methods=["GET", "POST"]
+)
+def register():
+
+    if request.method == "POST":
+
+        full_name = request.form.get(
+            "full_name",
+            ""
+        ).strip()
+
+        email = request.form.get(
+            "email",
+            ""
+        ).strip().lower()
+
+        password = request.form.get(
+            "password",
+            ""
+        )
+
+        face_image = request.form.get(
+            "face_image",
+            ""
+        )
+
+        if not full_name:
+
+            return "Full name is required.", 400
+
+        if not email:
+
+            return "Email is required.", 400
+
+        if not password:
+
+            return "Password is required.", 400
+
+        if not face_image:
+
+            return (
+                "Face verification is required."
+            ), 400
+
+        try:
+
+            require_supabase()
+
+            existing = (
+                supabase
+                .table("users")
+                .select("id")
+                .eq(
+                    "email",
+                    email
+                )
+                .limit(1)
+                .execute()
+            )
+
+            if existing.data:
+
+                return (
+                    "Email already registered."
+                ), 400
+
+            profile_filename = (
+                upload_base64_image(
+                    PROFILE_BUCKET,
+                    face_image
+                )
+            )
+
+            supabase.table(
+                "users"
+            ).insert({
+
+                "full_name":
+                    full_name,
+
+                "email":
+                    email,
+
+                "password":
+                    password,
+
+                "role":
+                    "citizen",
+
+                "profile_image":
+                    profile_filename
+
+            }).execute()
+
+            return redirect(
+                url_for("login")
+            )
+
+        except Exception as error:
+
+            print(
+                "Registration error:",
+                error
+            )
+
+            return (
+                "Unable to create account."
+            ), 500
+
+    return render_template(
+        "register.html"
+    )
+
+
+# =========================================================
+# LOGIN
+# =========================================================
+
+@app.route(
+    "/login",
+    methods=["GET", "POST"]
+)
+def login():
+
+    if request.method == "POST":
+
+        email = request.form.get(
+            "email",
+            ""
+        ).strip().lower()
+
+        password = request.form.get(
+            "password",
+            ""
+        )
+
+        try:
+
+            require_supabase()
+
+            result = (
+                supabase
+                .table("users")
+                .select("*")
+                .eq(
+                    "email",
+                    email
+                )
+                .eq(
+                    "password",
+                    password
+                )
+                .limit(1)
+                .execute()
+            )
+
+            user = (
+                result.data[0]
+                if result.data
+                else None
+            )
+
+        except Exception as error:
+
+            print(
+                "Login error:",
+                error
+            )
+
+            return (
+                "Unable to connect to database."
+            ), 500
+
+        if not user:
+
+            return (
+                "Invalid email or password."
+            ), 401
+
+        session["user_id"] = user["id"]
+
+        session["full_name"] = (
+            user.get("full_name", "")
+        )
+
+        session["role"] = (
+            user.get("role", "citizen")
+        )
+
+        session["profile_image"] = (
+            user.get("profile_image")
+        )
+
+        role = session["role"]
+
+        # -------------------------------------------------
+        # ADMIN
+        # -------------------------------------------------
+
+        if role == "admin":
+
+            return redirect(
+                url_for(
+                    "admin_dashboard"
+                )
+            )
+
+        # -------------------------------------------------
+        # GOVERNMENT
+        # -------------------------------------------------
+
+        if role in [
+            "government",
+            "gov_employee",
+            "government_employee"
+        ]:
+
+            return redirect(
+                url_for(
+                    "government_dashboard"
+                )
+            )
+
+        # -------------------------------------------------
+        # CITIZEN
+        # -------------------------------------------------
+
+        return redirect(
+            url_for("dashboard")
+        )
+
+    return render_template(
+        "login.html"
+    )
+
+
+# =========================================================
+# CITIZEN DASHBOARD
+# =========================================================
+
+@app.route("/dashboard")
+def dashboard():
+
+    if not is_logged_in():
+
+        return redirect(
+            url_for("login")
+        )
+
+    if is_government_user():
+
+        return redirect(
+            url_for(
+                "government_dashboard"
+            )
+        )
+
+    return render_template(
+        "dashboard.html"
+    )
+
+
+# =========================================================
+# GOVERNMENT DASHBOARD
+# =========================================================
+
+@app.route("/government")
+@app.route("/government/dashboard")
+def government_dashboard():
+
+    if not is_government_user():
+
+        return redirect(
+            url_for("login")
+        )
+
+    return render_template(
+        "government_dashboard.html"
+    )
+
+
+# =========================================================
+# ADMIN DASHBOARD
+# =========================================================
+
+@app.route("/admin")
+@app.route("/admin/dashboard")
+def admin_dashboard():
+
+    if not is_admin_user():
+
+        return redirect(
+            url_for("login")
+        )
+
+    return render_template(
+        "admin_dashboard.html"
+    )
+
+
+# =========================================================
+# CREATE CITIZEN REQUEST
+# =========================================================
+
+@app.route(
+    "/api/requests",
+    methods=["POST"]
+)
+def create_request():
+
+    if not is_logged_in():
+
+        return jsonify({
+            "success": False,
+            "error": "Unauthorized"
+        }), 401
+
+    if is_government_user():
+
+        return jsonify({
+            "success": False,
+            "error":
+                "Government accounts cannot submit citizen requests."
+        }), 403
+
+    require_supabase()
+
+    try:
+
+        data = (
+            request.get_json(
+                silent=True
+            )
+            or {}
+        )
+
+        category = str(
+            data.get(
+                "category",
+                "General Assistance"
+            )
+        ).strip()
+
+        description = str(
+            data.get(
+                "description",
+                ""
+            )
+        ).strip()
+
+        location = str(
+            data.get(
+                "location",
+                ""
+            )
+        ).strip()
+
+        image_data = data.get(
+            "image",
+            ""
+        )
+
+        if not description:
+
+            return jsonify({
+                        api_key or ""
     ).strip()
 
     if GEMINI_API_KEY:
