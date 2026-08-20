@@ -1048,6 +1048,252 @@ def government_critical_alerts():
             )
 
 
-            if candidate:
+                        if candidate:
 
-                update    )
+                try:
+
+                    supabase.table(
+                        "requests"
+                    ).update({
+
+                        "assigned_to":
+                            employee_id
+
+                    }).eq(
+                        "id",
+                        candidate["id"]
+                    ).execute()
+
+                    print(
+                        "Critical request automatically "
+                        "assigned to government employee:",
+                        employee_id
+                    )
+
+                    return jsonify({
+
+                        "success":
+                            True,
+
+                        "alert":
+                            candidate,
+
+                        "alarm_enabled":
+                            True
+
+                    })
+
+                except Exception as error:
+
+                    print(
+                        "Critical request assignment error:",
+                        error
+                    )
+
+
+        return jsonify({
+
+            "success":
+                True,
+
+            "alert":
+                None,
+
+            "alarm_enabled":
+                False
+
+        })
+
+
+    except Exception as error:
+
+        print(
+            "Critical alert error:",
+            error
+        )
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                "Unable to check critical alerts.",
+
+            "alarm_enabled":
+                False
+
+        }), 500
+
+
+# =========================================================
+# DASHBOARD
+# =========================================================
+
+@app.route("/dashboard")
+def dashboard():
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
+    if is_government_user():
+
+        return redirect(
+            url_for("government_dashboard")
+        )
+
+    return render_template(
+        "dashboard.html"
+    )
+
+
+# =========================================================
+# GOVERNMENT DASHBOARD
+# =========================================================
+
+@app.route("/government")
+@app.route("/government/dashboard")
+def government_dashboard():
+
+    if not is_government_user():
+
+        return redirect(
+            url_for("login")
+        )
+
+    return render_template(
+        "government_dashboard.html"
+    )
+
+
+# =========================================================
+# ADMIN DASHBOARD
+# =========================================================
+
+@app.route("/admin")
+@app.route("/admin/dashboard")
+def admin_dashboard():
+
+    if not is_admin_user():
+
+        return redirect(
+            url_for("login")
+        )
+
+    return render_template(
+        "admin_dashboard.html"
+    )
+
+
+# =========================================================
+# CREATE REQUEST
+# =========================================================
+
+@app.route(
+    "/api/requests",
+    methods=["POST"]
+)
+def create_request():
+
+    if "user_id" not in session:
+
+        return jsonify({
+            "error":
+                "Unauthorized"
+        }), 401
+
+
+    if is_government_user():
+
+        return jsonify({
+            "error":
+                "Government accounts cannot submit citizen requests."
+        }), 403
+
+
+    require_supabase()
+
+
+    try:
+
+        data = request.get_json(
+            silent=True
+        ) or {}
+
+
+        category = str(
+            data.get(
+                "category",
+                "General Assistance"
+            )
+        ).strip()
+
+
+        description = str(
+            data.get(
+                "description",
+                ""
+            )
+        ).strip()
+
+
+        location = str(
+            data.get(
+                "location",
+                ""
+            )
+        ).strip()
+
+
+        if not description:
+
+            return jsonify({
+
+                "success":
+                    False,
+
+                "error":
+                    "Request description is required."
+
+            }), 400
+
+
+        insert_data = {
+
+            "user_id":
+                session["user_id"],
+
+            "category":
+                category,
+
+            "description":
+                description,
+
+            "location":
+                location,
+
+            "priority":
+                "Moderate",
+
+            "analysis_status":
+                "pending",
+
+            "status":
+                "Pending",
+
+            "assigned_to":
+                None,
+
+            "forwarded":
+                False
+
+        }
+
+
+        result = (
+            supabase
+            .table("requests")
+            .
