@@ -1293,7 +1293,103 @@ def create_request():
         }
 
 
-        result = (
+                result = (
             supabase
             .table("requests")
-            .
+            .insert(insert_data)
+            .execute()
+        )
+
+
+        if not result.data:
+
+            return (
+                "Unable to create request."
+            )
+
+
+        created_request = result.data[0]
+
+        request_id = created_request["id"]
+
+
+        # =================================================
+        # SAVE OPTIONAL REPORT IMAGE
+        # =================================================
+
+        if image_data:
+
+            try:
+
+                report_filename = (
+                    upload_base64_image(
+                        REPORT_BUCKET,
+                        image_data
+                    )
+                )
+
+
+                (
+                    supabase
+                    .table("requests")
+                    .update({
+                        "image":
+                            report_filename
+                    })
+                    .eq(
+                        "id",
+                        request_id
+                    )
+                    .execute()
+                )
+
+
+            except Exception as image_error:
+
+                print(
+                    "Report image upload error:",
+                    image_error
+                )
+
+
+        # =================================================
+        # START GEMINI AI ANALYSIS
+        # =================================================
+
+        analysis_thread = threading.Thread(
+            target=analyze_request_with_gemini,
+            args=(
+                request_id,
+                category,
+                description
+            ),
+            daemon=True
+        )
+
+        analysis_thread.start()
+
+
+        # =================================================
+        # RETURN TO CITIZEN DASHBOARD
+        # =================================================
+
+        return redirect(
+            url_for("dashboard")
+        )
+
+
+    except Exception as error:
+
+        print(
+            "Request creation error:",
+            error
+        )
+
+        return (
+            "Unable to submit your request."
+        ), 500
+
+
+    return render_template(
+        "request.html"
+    )
