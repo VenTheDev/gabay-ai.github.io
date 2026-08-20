@@ -1201,14 +1201,15 @@ def create_request():
     if "user_id" not in session:
 
         return jsonify({
-            "error":
-                "Unauthorized"
+            "success": False,
+            "error": "Unauthorized"
         }), 401
 
 
     if is_government_user():
 
         return jsonify({
+            "success": False,
             "error":
                 "Government accounts cannot submit citizen requests."
         }), 403
@@ -1223,6 +1224,10 @@ def create_request():
             silent=True
         ) or {}
 
+
+        # -------------------------------------------------
+        # REQUEST INFORMATION
+        # -------------------------------------------------
 
         category = str(
             data.get(
@@ -1248,6 +1253,17 @@ def create_request():
         ).strip()
 
 
+        # Optional image
+        image_data = data.get(
+            "image",
+            ""
+        )
+
+
+        # -------------------------------------------------
+        # VALIDATION
+        # -------------------------------------------------
+
         if not description:
 
             return jsonify({
@@ -1260,6 +1276,10 @@ def create_request():
 
             }), 400
 
+
+        # -------------------------------------------------
+        # CREATE REQUEST
+        # -------------------------------------------------
 
         insert_data = {
 
@@ -1293,7 +1313,7 @@ def create_request():
         }
 
 
-                result = (
+        result = (
             supabase
             .table("requests")
             .insert(insert_data)
@@ -1303,14 +1323,26 @@ def create_request():
 
         if not result.data:
 
-            return (
-                "Unable to create request."
-            )
+            return jsonify({
+
+                "success":
+                    False,
+
+                "error":
+                    "Unable to create request."
+
+            }), 500
 
 
         created_request = result.data[0]
 
         request_id = created_request["id"]
+
+
+        print(
+            "Request created:",
+            request_id
+        )
 
 
         # =================================================
@@ -1321,11 +1353,9 @@ def create_request():
 
             try:
 
-                report_filename = (
-                    upload_base64_image(
-                        REPORT_BUCKET,
-                        image_data
-                    )
+                report_filename = upload_base64_image(
+                    REPORT_BUCKET,
+                    image_data
                 )
 
 
@@ -1333,14 +1363,22 @@ def create_request():
                     supabase
                     .table("requests")
                     .update({
+
                         "image":
                             report_filename
+
                     })
                     .eq(
                         "id",
                         request_id
                     )
                     .execute()
+                )
+
+
+                print(
+                    "Report image uploaded:",
+                    report_filename
                 )
 
 
@@ -1357,25 +1395,55 @@ def create_request():
         # =================================================
 
         analysis_thread = threading.Thread(
+
             target=analyze_request_with_gemini,
+
             args=(
+
                 request_id,
+
                 category,
+
                 description
+
             ),
+
             daemon=True
+
         )
+
 
         analysis_thread.start()
 
 
+        print(
+            "Gemini analysis started for request:",
+            request_id
+        )
+
+
         # =================================================
-        # RETURN TO CITIZEN DASHBOARD
+        # RETURN SUCCESS
         # =================================================
 
-        return redirect(
-            url_for("dashboard")
-        )
+        return jsonify({
+
+            "success":
+                True,
+
+            "message":
+                "Request submitted successfully.",
+
+            "request_id":
+                request_id,
+
+            "priority":
+                "Moderate",
+
+            "analysis_status":
+                "pending"
+
+        }), 201
 
 
     except Exception as error:
@@ -1385,11 +1453,534 @@ def create_request():
             error
         )
 
-        return (
-            "Unable to submit your request."
-        ), 500
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                "Unable to submit your request."
+
+        }), 500
 
 
-    return render_template(
-        "request.html"
+# =========================================================
+# GET CURRENT USER REQUESTS
+# =========================================================
+
+@app.route(
+    "/api/requests",
+    methods=["GET"]
+)
+def get_user_requests():
+
+    if "user_id" not in session:
+
+        return jsonify({
+            "success": False,
+            "error": "Unauthorized"
+        }), 401
+
+
+    require_supabase()
+
+
+    try:
+
+        result = (
+            supabase
+            .table("requests")
+            .select("*")
+            .eq(
+                "user_id",
+                session["user_id"]
+            )
+            .order(
+                "id",
+                desc=True
+            )
+            .execute()
+        )
+
+
+        return jsonify({
+
+            "success":
+                True,
+
+            "requests":
+                result.data or []
+
+        })
+
+
+    except Exception as error:
+
+        print(
+            "Get requests error:",
+            error
+        )
+
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                "Unable to load requests."
+
+        }), 500
+
+
+# =========================================================
+# GET GOVERNMENT REQUESTS
+# =========================================================
+
+@app.route(
+    "/api/government/requests",
+    methods=["GET"]
+)
+def get_government_requests():
+
+    if not is_government_user():
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                "Unauthorized"
+
+        }), 403
+
+
+    require_supabase()
+
+
+    try:
+
+        result = (
+            supabase
+            .table("requests")
+            .select("*")
+            .order(
+                "id",
+                desc=True
+            )
+            .execute()
+        )
+
+
+        return jsonify({
+
+            "success":
+                True,
+
+            "requests":
+                result.data or []
+
+        })
+
+
+    except Exception as error:
+
+        print(
+            "Government requests error:",
+            error
+        )
+
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                "Unable to load government requests."
+
+        }), 500
+
+
+# =========================================================
+# UPDATE REQUEST STATUS
+# =========================================================
+
+@app.route(
+    "/api/government/requests/<request_id>",
+    methods=["PATCH"]
+)
+def update_government_request(request_id):
+
+    if not is_government_user():
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                "Unauthorized"
+
+        }), 403
+
+
+    require_supabase()
+
+
+    try:
+
+        data = request.get_json(
+            silent=True
+        ) or {}
+
+
+        update_data = {}
+
+
+        if "status" in data:
+
+            update_data["status"] = str(
+                data["status"]
+            ).strip()
+
+
+        if "assigned_to" in data:
+
+            update_data["assigned_to"] = (
+                data["assigned_to"]
+            )
+
+
+        if "forwarded" in data:
+
+            update_data["forwarded"] = bool(
+                data["forwarded"]
+            )
+
+
+        if not update_data:
+
+            return jsonify({
+
+                "success":
+                    False,
+
+                "error":
+                    "No changes provided."
+
+            }), 400
+
+
+        result = (
+            supabase
+            .table("requests")
+            .update(update_data)
+            .eq(
+                "id",
+                request_id
+            )
+            .execute()
+        )
+
+
+        return jsonify({
+
+            "success":
+                True,
+
+            "request":
+                result.data[0]
+                if result.data
+                else None
+
+        })
+
+
+    except Exception as error:
+
+        print(
+            "Request update error:",
+            error
+        )
+
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                "Unable to update request."
+
+        }), 500
+
+
+# =========================================================
+# ADMIN - GET GEMINI SETTINGS
+# =========================================================
+
+@app.route(
+    "/api/admin/gemini-key",
+    methods=["GET"]
+)
+def admin_get_gemini_key():
+
+    if not is_admin_user():
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                "Unauthorized"
+
+        }), 403
+
+
+    require_supabase()
+
+
+    try:
+
+        result = (
+            supabase
+            .table("app_settings")
+            .select("value")
+            .eq(
+                "key",
+                "gemini_api_key"
+            )
+            .limit(1)
+            .execute()
+        )
+
+
+        value = ""
+
+        if result.data:
+
+            value = result.data[0].get(
+                "value",
+                ""
+            )
+
+
+        return jsonify({
+
+            "success":
+                True,
+
+            "configured":
+                bool(value),
+
+            "key":
+                value
+
+        })
+
+
+    except Exception as error:
+
+        print(
+            "Admin Gemini key error:",
+            error
+        )
+
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                "Unable to load Gemini API key."
+
+        }), 500
+
+
+# =========================================================
+# ADMIN - UPDATE GEMINI SETTINGS
+# =========================================================
+
+@app.route(
+    "/api/admin/gemini-key",
+    methods=["POST"]
+)
+def admin_update_gemini_key():
+
+    if not is_admin_user():
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                "Unauthorized"
+
+        }), 403
+
+
+    require_supabase()
+
+
+    try:
+
+        data = request.get_json(
+            silent=True
+        ) or {}
+
+
+        new_key = str(
+            data.get(
+                "api_key",
+                ""
+            )
+        ).strip()
+
+
+        if not new_key:
+
+            return jsonify({
+
+                "success":
+                    False,
+
+                "error":
+                    "Gemini API key is required."
+
+            }), 400
+
+
+        existing = (
+            supabase
+            .table("app_settings")
+            .select("id")
+            .eq(
+                "key",
+                "gemini_api_key"
+            )
+            .limit(1)
+            .execute()
+        )
+
+
+        if existing.data:
+
+            (
+                supabase
+                .table("app_settings")
+                .update({
+
+                    "value":
+                        new_key
+
+                })
+                .eq(
+                    "key",
+                    "gemini_api_key"
+                )
+                .execute()
+            )
+
+        else:
+
+            (
+                supabase
+                .table("app_settings")
+                .insert({
+
+                    "key":
+                        "gemini_api_key",
+
+                    "value":
+                        new_key
+
+                })
+                .execute()
+            )
+
+
+        # Immediately update the running application
+        configure_gemini_client(
+            new_key
+        )
+
+
+        return jsonify({
+
+            "success":
+                True,
+
+            "message":
+                "Gemini API key updated successfully."
+
+        })
+
+
+    except Exception as error:
+
+        print(
+            "Admin Gemini key update error:",
+            error
+        )
+
+
+        return jsonify({
+
+            "success":
+                False,
+
+            "error":
+                "Unable to update Gemini API key."
+
+        }), 500
+
+
+# =========================================================
+# LOGOUT
+# =========================================================
+
+@app.route(
+    "/logout"
+)
+def logout():
+
+    session.clear()
+
+
+    return redirect(
+        url_for("index")
+    )
+
+
+# =========================================================
+# APPLICATION STARTUP
+# =========================================================
+
+initialize_database()
+
+
+# =========================================================
+# RUN APPLICATION
+# =========================================================
+
+if __name__ == "__main__":
+
+    port = int(
+        os.environ.get(
+            "PORT",
+            3000
+        )
+    )
+
+
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False
     )
