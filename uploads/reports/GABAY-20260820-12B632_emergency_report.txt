@@ -1,0 +1,27 @@
+# GABAY EMERGENCY INCIDENT REPORT
+
+### Incident Summary
+* **Ticket Number:** GABAY-20260820-12B632
+* **Date Submitted:** 2026-08-20 02:33:40
+* **Category:** Medical
+* **Status:** Pending
+* **Reporting Citizen:** Test User
+
+### Location
+* **Address:** 1763 C Guizon St. Brgy Carmona Makati City
+* **Latitude:** 14.576315052176447
+* **Longitude:** 121.01580424961135
+
+### Reported Situation
+* **Citizen Description:** "Inatake sa puso asawa ko" (Citizen's spouse suffered a heart attack)
+
+### Priority Assessment
+* **Priority:** Critical
+
+### Recommended Immediate Action
+* Dispatch emergency medical responders immediately to the specified coordinates/address to handle a reported cardiac emergency.
+
+### Information for Responding Department
+* **Citizen Name:** Test User
+* **Citizen Contact Phone:** Not provided
+* **Additional Medical Details:** Not provided

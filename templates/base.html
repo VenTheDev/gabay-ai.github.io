@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>GABAY</title>
+
+
+    <!-- Google Fonts -->
+
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+
+    <!-- CSS -->
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+
+</head>
+
+
+<body>
+
+
+    <!-- =========================
+         NAVBAR
+    ========================== -->
+
+    <nav class="navbar">
+
+        <!-- LOGO -->
+
+        <div class="logo">
+
+            {% if session.get("user_id") %}
+
+                <a href="{{ url_for('dashboard') }}">
+                    GABAY
+                </a>
+
+            {% else %}
+
+                <a href="{{ url_for('index') }}">
+                    GABAY
+                </a>
+
+            {% endif %}
+
+        </div>
+
+
+
+        <!-- MOBILE MENU BUTTON -->
+        <button
+            type="button"
+            class="nav-hamburger"
+            id="navHamburger"
+            aria-label="Open navigation menu"
+            aria-controls="mainNavLinks"
+            aria-expanded="false"
+        >
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+
+        <!-- NAVIGATION -->
+
+        <div class="nav-links" id="mainNavLinks">
+
+
+            {% if session.get("user_id") %}
+
+                <!-- LOGGED-IN NAVBAR -->
+
+                <a href="{{ url_for('dashboard') }}">
+                    Home
+                </a>
+
+                <a href="{{ url_for('dashboard') }}">
+                    Dashboard
+                </a>
+
+                <a href="#">
+                    Services
+                </a>
+
+                <a href="#">
+                    About
+                </a>
+
+                <a
+                    href="{{ url_for('logout') }}"
+                    class="nav-logout"
+                >
+                    Logout
+                </a>
+
+
+            {% else %}
+
+                <!-- PUBLIC NAVBAR -->
+
+                <a href="{{ url_for('index') }}">
+                    Home
+                </a>
+
+                <a href="#services">
+                    Services
+                </a>
+
+                <a href="#about">
+                    About
+                </a>
+
+                <a href="{{ url_for('login') }}">
+                    Login
+                </a>
+
+                <a
+                    href="{{ url_for('register') }}"
+                    class="nav-register"
+                >
+                    Register
+                </a>
+
+            {% endif %}
+
+        </div>
+
+    </nav>
+
+
+
+    <!-- =========================
+         PAGE CONTENT
+    ========================== -->
+
+    {% block content %}
+
+    {% endblock %}
+
+    <script>
+    (function () {
+        const button = document.getElementById("navHamburger");
+        const menu = document.getElementById("mainNavLinks");
+        if (!button || !menu) return;
+
+        function closeMenu() {
+            menu.classList.remove("is-open");
+            button.classList.remove("is-open");
+            button.setAttribute("aria-expanded", "false");
+            button.setAttribute("aria-label", "Open navigation menu");
+        }
+
+        button.addEventListener("click", function () {
+            const open = menu.classList.toggle("is-open");
+            button.classList.toggle("is-open", open);
+            button.setAttribute("aria-expanded", String(open));
+            button.setAttribute("aria-label", open ? "Close navigation menu" : "Open navigation menu");
+        });
+
+        menu.querySelectorAll("a").forEach(function (link) {
+            link.addEventListener("click", closeMenu);
+        });
+
+        document.addEventListener("click", function (event) {
+            if (!menu.classList.contains("is-open")) return;
+            if (!menu.contains(event.target) && !button.contains(event.target)) closeMenu();
+        });
+
+        window.addEventListener("resize", function () {
+            if (window.innerWidth > 760) closeMenu();
+        });
+    })();
+    </script>
+
+</body>
+
+</html>

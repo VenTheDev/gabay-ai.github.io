@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Request Information | GABAY</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+
+</head>
+
+<body>
+
+    <main class="request-info-page">
+
+        <section class="request-info-card">
+
+            <h1>
+                Request Information
+            </h1>
+
+            <p>
+                Your request has been analyzed by GABAY.
+            </p>
+
+
+            <!-- ================================================= -->
+            <!-- TICKET -->
+            <!-- ================================================= -->
+
+            <div class="request-info-row">
+
+                <span>
+                    GABAY Ticket Number
+                </span>
+
+                <strong>
+                    {{ request_data["ticket_number"] }}
+                </strong>
+
+            </div>
+
+
+            <!-- ================================================= -->
+            <!-- ASSISTANCE TYPE -->
+            <!-- ================================================= -->
+
+            <div class="request-info-row">
+
+                <span>
+                    Assistance Type
+                </span>
+
+                <strong>
+                    {{ request_data["category"] }}
+                </strong>
+
+            </div>
+
+
+            <!-- ================================================= -->
+            <!-- DESCRIPTION -->
+            <!-- ================================================= -->
+
+            <div class="request-info-row">
+
+                <span>
+                    Description
+                </span>
+
+                <strong>
+                    {{ request_data["description"] }}
+                </strong>
+
+            </div>
+
+
+            <!-- ================================================= -->
+            <!-- PRIORITY -->
+            <!-- ================================================= -->
+
+            <div class="request-info-row">
+
+                <span>
+                    Severity
+                </span>
+
+                <strong
+                    class="priority-{{ request_data['priority']|lower }}"
+                >
+                    {{ request_data["priority"] }}
+                </strong>
+
+            </div>
+
+
+            <!-- ================================================= -->
+            <!-- STATUS -->
+            <!-- ================================================= -->
+
+            <div class="request-info-row">
+
+                <span>
+                    Status
+                </span>
+
+                <strong>
+                    {{ request_data["status"] }}
+                </strong>
+
+            </div>
+
+
+            <!-- ================================================= -->
+            <!-- DATE -->
+            <!-- ================================================= -->
+
+            <div class="request-info-row">
+
+                <span>
+                    Submitted
+                </span>
+
+                <strong>
+                    {{ request_data["created_at"] }}
+                </strong>
+
+            </div>
+
+
+            <a
+                href="{{ url_for('dashboard') }}"
+                class="back-button"
+            >
+                Back to Dashboard
+            </a>
+
+        </section>
+
+    </main>
+
+</body>
+
+</html>

@@ -1,0 +1,30 @@
+**GABAY EMERGENCY INCIDENT REPORT**
+
+**Incident Summary**
+* **Ticket Number:** GABAY-20260820-E3A995
+* **Date Submitted:** 2026-08-20 03:25:04
+* **Category:** Medical
+* **Status:** Pending
+* **Reporting Citizen:** Test User
+
+**Location**
+* **Address:** 1980, Fe Guizon Street, Carmona, District I, Makati, Southern Manila District, Metro Manila, 1207, Philippines
+* **Latitude:** 14.576343
+* **Longitude:** 121.015889
+
+**Reported Situation**
+* **Citizen Statement:** "Nabalian asawa ko kasi nadulas." 
+* **Details:** The reporting citizen's spouse slipped and sustained a fracture/broken bone.
+
+**Priority Assessment**
+* **Priority Level:** Critical
+* **Assessment:** Classified as Critical due to an urgent medical incident involving a severe injury (fracture) resulting from a fall.
+
+**Recommended Immediate Action**
+* Dispatch emergency medical responders immediately to the specified address/coordinates to provide urgent care and transportation for a suspected fracture.
+
+**Information for Responding Department**
+* **Complainant Name:** Test User
+* **Complainant Contact Number:** Not provided
+* **Patient Name:** Not provided (Spouse of Test User)
+* **Additional Emergency Details:** Not provided
